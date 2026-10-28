@@ -719,9 +719,9 @@ const CURRENCY_WORDS = [
   ['CAD', /دولار\s*كندي|CAD/i], ['AUD', /دولار\s*[اأ]سترالي|AUD/i],
   ['EUR', /يورو|EUR|€/i], ['USD', /دولار|USD|\$/i], ['LYD', /دينار|د\.\s*ل|LYD/i],
 ];
-const SENT_WORDS = /حولت|حوّلت|دفعت|سلمت|سلّمت|أرسلت|ارسلت|بعثت|وديت|سددت|نزلت|حطيت|عطيت|transferred|sent|paid/i;
-const RECEIVED_WORDS = /استلمت|استلمنا|وصلني|وصلتني|قبضت|جاني|جاتني|received/i;
-const THEY_SENT_TO_ME = /(حولت|دفعت|ارسلت|أرسلت)\s*(ل[كي])|وصلك|وصلتك/;
+const SENT_WORDS = /حولت|حوّلت|جولت|جوّلت|حوالت|حوّال|دفعت|سلمت|سلّمت|أرسلت|ارسلت|بعثت|وديت|سددت|نزلت|حطيت|عطيت|حوّل(?:ت|نا|وا)?|transferred|sent|paid/i;
+const RECEIVED_WORDS = /استلمت|استلمنا|وصلني|وصلتني|وصلتلك|وصللك|قبضت|جاني|جاتني|received/i;
+const THEY_SENT_TO_ME = /(حولت|حوّلت|جولت|جوّلت|حوالت|دفعت|ارسلت|أرسلت)\s*(ل[كي]|لك)|وصلك|وصلتك/;
 function localExtract(batch, ownerNames) {
   const items = [];
   batch.forEach((m) => {
