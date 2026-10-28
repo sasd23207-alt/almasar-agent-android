@@ -977,6 +977,23 @@ function renderAll() { renderMerchants(); renderPending(); renderStatement(); re
 function fillCurrencies() {
   el('txCurrency').innerHTML = Object.keys(CURRENCY_DECIMALS).map((c) => `<option value="${c}">${c} — ${CURRENCY_NAMES[c]}</option>`).join('');
 }
+async function importNativeShareToInbox() {
+  const native = window.AlmasarNative;
+  if (!native || typeof native.getPendingSharedText !== 'function') { return; }
+  let sharedText = '';
+  // File shares may be read asynchronously by Android; briefly poll before giving up.
+  for (let attempt = 0; attempt < 12 && !sharedText; attempt++) {
+    try { sharedText = native.getPendingSharedText() || ''; } catch (error) { return; }
+    if (!sharedText) { await new Promise((resolve) => setTimeout(resolve, 250)); }
+  }
+  if (!sharedText.trim()) { return; }
+  let sharedName = 'محادثة واتساب';
+  try { sharedName = native.getPendingSharedName() || sharedName; } catch (error) {}
+  const item = { id: 'native-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), name: sharedName, text: sharedText };
+  // Stage only: never assign a shared conversation to a merchant or write ledger entries automatically.
+  await runRequest('inbox', 'readwrite', (store) => store.put(item));
+  try { native.clearPendingShared(); } catch (error) {}
+}
 async function startApp() {
   fillCurrencies();
   await loadState();
@@ -985,6 +1002,9 @@ async function startApp() {
   el('modelInput').value = state.settings.model || '';
   resetForm();
   renderAll();
+  try { await importNativeShareToInbox(); } catch (error) {
+    el('statusBar').textContent += ' — لم أستطع تجهيز النص القادم من واتساب؛ لم أغيّر كشف الحساب.';
+  }
   await checkSharedInbox();
   if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
 }
