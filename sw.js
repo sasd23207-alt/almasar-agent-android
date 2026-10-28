@@ -5,7 +5,7 @@
  *    'inbox' of the local database; the app imports them when it opens.
  * It never touches the ledger itself and never sends anything over the network.
  */
-const CACHE_NAME = 'almasar-shell-v5';
+const CACHE_NAME = 'almasar-shell-v6';
 const SHELL_FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
