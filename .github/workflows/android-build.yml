@@ -58,6 +58,140 @@ jobs:
         run: |
           npm install
           npx cap add android
+      - name: Enable native WhatsApp share target
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          path = "android/app/src/main/AndroidManifest.xml"
+          android = "{http://schemas.android.com/apk/res/android}"
+          ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
+          tree = ET.parse(path)
+          root = tree.getroot()
+          app = root.find("application")
+          if app is None:
+              raise SystemExit("AndroidManifest has no application element")
+          activity = next((node for node in app.findall("activity")
+                           if node.get(android + "name", "").endswith("MainActivity")), None)
+          if activity is None:
+              raise SystemExit("Capacitor MainActivity not found in AndroidManifest")
+          wanted = [(action, mime) for action in
+                    ("android.intent.action.SEND", "android.intent.action.SEND_MULTIPLE")
+                    for mime in ("text/plain", "text/*", "application/octet-stream")]
+          existing = set()
+          for filt in activity.findall("intent-filter"):
+              actions = {x.get(android + "name") for x in filt.findall("action")}
+              types = {x.get(android + "mimeType") for x in filt.findall("data")}
+              for action in actions:
+                  for mime in types:
+                      existing.add((action, mime))
+          for action, mime in wanted:
+              if (action, mime) in existing:
+                  continue
+              filt = ET.SubElement(activity, "intent-filter")
+              ET.SubElement(filt, "action", {android + "name": action})
+              ET.SubElement(filt, "category", {android + "name": "android.intent.category.DEFAULT"})
+              ET.SubElement(filt, "data", {android + "mimeType": mime})
+          ET.indent(tree, space="    ")
+          tree.write(path, encoding="utf-8", xml_declaration=True)
+          PY
+          mkdir -p android/app/src/main/java/ly/almasar/agent
+          cat > android/app/src/main/java/ly/almasar/agent/MainActivity.java <<'JAVA'
+          package ly.almasar.agent;
+
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.net.Uri;
+          import android.os.Bundle;
+          import android.webkit.JavascriptInterface;
+          import com.getcapacitor.BridgeActivity;
+          import java.io.ByteArrayOutputStream;
+          import java.io.InputStream;
+          import java.nio.charset.StandardCharsets;
+          import java.util.concurrent.ExecutorService;
+          import java.util.concurrent.Executors;
+
+          public class MainActivity extends BridgeActivity {
+              private static final String PREFS = "AlmasarNativeShare";
+              private final ExecutorService shareReader = Executors.newSingleThreadExecutor();
+
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  attachShareBridge();
+                  handleShareIntent(getIntent());
+              }
+
+              @Override
+              protected void onNewIntent(Intent intent) {
+                  super.onNewIntent(intent);
+                  setIntent(intent);
+                  attachShareBridge();
+                  handleShareIntent(intent);
+              }
+
+              private void attachShareBridge() {
+                  if (getBridge() != null && getBridge().getWebView() != null) {
+                      getBridge().getWebView().addJavascriptInterface(new ShareBridge(), "AlmasarNative");
+                  }
+              }
+
+              private void saveSharedText(String name, String text) {
+                  if (text == null || text.trim().isEmpty()) return;
+                  getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                      .putString("name", name == null || name.trim().isEmpty() ? "محادثة واتساب" : name)
+                      .putString("text", text)
+                      .apply();
+              }
+
+              private void handleShareIntent(Intent intent) {
+                  if (intent == null) return;
+                  String action = intent.getAction();
+                  if (!Intent.ACTION_SEND.equals(action) && !Intent.ACTION_SEND_MULTIPLE.equals(action)) return;
+
+                  String title = intent.getStringExtra(Intent.EXTRA_TITLE);
+                  CharSequence shared = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+                  Uri stream = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+                  if (stream != null) {
+                      final Uri fileUri = stream;
+                      final String fileName = title != null ? title : fileUri.getLastPathSegment();
+                      shareReader.execute(() -> {
+                          try (InputStream in = getContentResolver().openInputStream(fileUri);
+                               ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                              if (in == null) return;
+                              byte[] buffer = new byte[8192];
+                              int count;
+                              while ((count = in.read(buffer)) != -1) {
+                                  if (out.size() + count > 12 * 1024 * 1024) return;
+                                  out.write(buffer, 0, count);
+                              }
+                              saveSharedText(fileName, new String(out.toByteArray(), StandardCharsets.UTF_8));
+                          } catch (Exception ignored) {
+                              if (shared != null) saveSharedText(title, shared.toString());
+                          }
+                      });
+                  } else if (shared != null) {
+                      saveSharedText(title, shared.toString());
+                  }
+              }
+
+              private final class ShareBridge {
+                  @JavascriptInterface
+                  public String getPendingSharedText() {
+                      return getSharedPreferences(PREFS, MODE_PRIVATE).getString("text", "");
+                  }
+
+                  @JavascriptInterface
+                  public String getPendingSharedName() {
+                      return getSharedPreferences(PREFS, MODE_PRIVATE).getString("name", "محادثة واتساب");
+                  }
+
+                  @JavascriptInterface
+                  public void clearPendingShared() {
+                      getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove("text").remove("name").apply();
+                  }
+              }
+          }
+          JAVA
       - name: Build debug APK
         run: |
           cd android
