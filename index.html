@@ -650,11 +650,21 @@ function importChat(chatText) {
     (parsed.orderIsCertain ? '' : ' تنبيه: لم أستطع التأكد من ترتيب اليوم والشهر في التواريخ (افترضت يوم/شهر).') +
     (saved ? '' : ' لكن الحفظ فشل.');
   renderMessages();
+  return added;
 }
 el('importButton').addEventListener('click', async () => {
   const file = el('chatFile').files[0];
   const text = file ? await file.text() : el('chatText').value;
-  importChat(text);
+  const added = importChat(text);
+  if (added > 0) {
+    const ownerName = el('ownerNameInput').value.trim();
+    if (ownerName) {
+      el('importReport').textContent += ' جارٍ تحليل الرسائل المستوردة الآن؛ المعاملات المستخرجة ستبقى للمراجعة قبل احتسابها.';
+      await analyzeNewMessages();
+    } else {
+      el('importReport').textContent += ' لتحديد اتجاه الحوالات تلقائيًا، اكتب اسمك في «وكيل الاستخراج» ثم اضغط «حلّل الرسائل الجديدة».';
+    }
+  }
 });
 el('messages').addEventListener('click', (event) => {
   const id = event.target.dataset.use;
