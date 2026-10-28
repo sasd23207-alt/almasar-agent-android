@@ -3,13 +3,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    paths:
-      - 'index.html'
-      - 'manifest.webmanifest'
-      - 'sw.js'
-      - 'icon-192.png'
-      - 'icon-512.png'
-      - '.github/workflows/android-build.yml'
+    branches: [main]
 
 permissions:
   contents: read
