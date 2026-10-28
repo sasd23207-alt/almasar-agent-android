@@ -1,0 +1,77 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'index.html'
+      - 'manifest.webmanifest'
+      - 'sw.js'
+      - 'icon-192.png'
+      - 'icon-512.png'
+      - '.github/workflows/android-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Prepare web assets
+        run: |
+          mkdir -p www
+          cp index.html www/
+          [ ! -f manifest.webmanifest ] || cp manifest.webmanifest www/
+          [ ! -f sw.js ] || cp sw.js www/
+          [ ! -f icon-192.png ] || cp icon-192.png www/
+          [ ! -f icon-512.png ] || cp icon-512.png www/
+          cat > package.json <<'EOF'
+          {
+            "name": "almasar-agent-android",
+            "version": "1.0.0",
+            "private": true,
+            "description": "Android package for Almasar agent app",
+            "dependencies": {
+              "@capacitor/core": "^7.4.3",
+              "@capacitor/android": "^7.4.3"
+            },
+            "devDependencies": {
+              "@capacitor/cli": "^7.4.3"
+            }
+          }
+          EOF
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "ly.almasar.agent",
+            "appName": "المسار",
+            "webDir": "www",
+            "bundledWebRuntime": false,
+            "server": {
+              "androidScheme": "https"
+            }
+          }
+          EOF
+      - name: Install Capacitor and generate Android project
+        run: |
+          npm install
+          npx cap add android
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: almasar-agent-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
