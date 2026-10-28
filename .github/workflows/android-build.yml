@@ -45,8 +45,8 @@ jobs:
           EOF
           cat > capacitor.config.json <<'EOF'
           {
-            "appId": "ly.almasar.agent",
-            "appName": "المسار",
+            "appId": "ly.almasar.agent.next",
+            "appName": "المسار - نسخة جديدة",
             "webDir": "www",
             "bundledWebRuntime": false,
             "server": {
@@ -94,9 +94,9 @@ jobs:
           ET.indent(tree, space="    ")
           tree.write(path, encoding="utf-8", xml_declaration=True)
           PY
-          mkdir -p android/app/src/main/java/ly/almasar/agent
-          cat > android/app/src/main/java/ly/almasar/agent/MainActivity.java <<'JAVA'
-          package ly.almasar.agent;
+          mkdir -p android/app/src/main/java/ly/almasar/agent/next
+          cat > android/app/src/main/java/ly/almasar/agent/next/MainActivity.java <<'JAVA'
+          package ly.almasar.agent.next;
 
           import android.content.Intent;
           import android.content.SharedPreferences;
