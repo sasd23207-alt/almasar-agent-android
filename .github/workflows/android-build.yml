@@ -190,6 +190,16 @@ jobs:
                   public void clearPendingShared() {
                       getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove("text").remove("name").apply();
                   }
+
+                  @JavascriptInterface
+                  public void setRelayConfig(String json) {
+                      getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString("relay_config", json).apply();
+                  }
+
+                  @JavascriptInterface
+                  public String getRelayConfig() {
+                      return getSharedPreferences(PREFS, MODE_PRIVATE).getString("relay_config", "");
+                  }
               }
           }
           JAVA
