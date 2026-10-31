@@ -20,7 +20,7 @@ function authorized(req) {
   return APP_TOKEN && token && crypto.timingSafeEqual(Buffer.from(token), Buffer.from(APP_TOKEN));
 }
 function verifySignature(raw, signature) {
-  if (!GRAPH_APP_SECRET) return true;
+  if (!GRAPH_APP_SECRET) return false;
   if (!signature || !signature.startsWith('sha256=')) return false;
   const expected = 'sha256=' + crypto.createHmac('sha256', GRAPH_APP_SECRET).update(raw).digest('hex');
   const a = Buffer.from(signature), b = Buffer.from(expected);
@@ -29,7 +29,7 @@ function verifySignature(raw, signature) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = []; let size = 0;
-    req.on('data', chunk => { size += chunk.length; if (size > 1024 * 1024) { reject(new Error('payload_too_large')); req.destroy(); return; } chunks.push(chunk); });
+    req.on('data', chunk => { size += chunk.length; if (size > 4 * 1024 * 1024) { reject(new Error('payload_too_large')); req.destroy(); return; } chunks.push(chunk); });
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
@@ -85,6 +85,7 @@ const app = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/webhook') {
     let raw;
     try { raw = await readBody(req); } catch { return json(res, 413, { error: 'payload_too_large' }); }
+    if (!GRAPH_APP_SECRET) return json(res, 503, { error: 'webhook_signature_secret_not_configured' });
     if (!verifySignature(raw, req.headers['x-hub-signature-256'])) return json(res, 401, { error: 'invalid_signature' });
     let payload;
     try { payload = JSON.parse(raw.toString('utf8')); } catch { return json(res, 400, { error: 'invalid_json' }); }
