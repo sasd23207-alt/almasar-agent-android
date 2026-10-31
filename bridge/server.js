@@ -7,29 +7,37 @@ const APP_TOKEN = process.env.APP_DEVICE_TOKEN || '';
 const GRAPH_APP_SECRET = process.env.META_APP_SECRET || '';
 const pending = new Map();
 const waiters = [];
-const seen = new Map();
-const MAX_PENDING = 100;
+const acknowledged = new Map();
+const MAX_PENDING = 250;
 const ACK_TIMEOUT_MS = 18000;
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
 function json(res, status, body) {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-  res.end(JSON.stringify(body));
+  res.end(status === 204 ? undefined : JSON.stringify(body));
+}
+function safeEqualText(a, b) {
+  const left = Buffer.from(String(a || ''));
+  const right = Buffer.from(String(b || ''));
+  return left.length > 0 && left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 function authorized(req) {
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  return APP_TOKEN && token && crypto.timingSafeEqual(Buffer.from(token), Buffer.from(APP_TOKEN));
+  return safeEqualText(token, APP_TOKEN);
 }
 function verifySignature(raw, signature) {
-  if (!GRAPH_APP_SECRET) return false;
-  if (!signature || !signature.startsWith('sha256=')) return false;
+  if (!GRAPH_APP_SECRET || !signature || !signature.startsWith('sha256=')) return false;
   const expected = 'sha256=' + crypto.createHmac('sha256', GRAPH_APP_SECRET).update(raw).digest('hex');
-  const a = Buffer.from(signature), b = Buffer.from(expected);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  return safeEqualText(signature, expected);
 }
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = []; let size = 0;
-    req.on('data', chunk => { size += chunk.length; if (size > 4 * 1024 * 1024) { reject(new Error('payload_too_large')); req.destroy(); return; } chunks.push(chunk); });
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) { reject(new Error('payload_too_large')); req.destroy(); return; }
+      chunks.push(chunk);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
@@ -46,40 +54,63 @@ function extractMessages(payload) {
         timestamp: String(msg.timestamp || ''),
         type: String(msg.type || ''),
         text: msg.text && typeof msg.text.body === 'string' ? msg.text.body : '',
-        contacts: msg.contacts || null,
-        location: msg.location || null,
-        interactive: msg.interactive || null,
+        contacts: value.contacts || null,
+        metadata: value.metadata || null,
         rawMessage: msg
       });
     }
   }
   return out;
 }
-function deliver(message) {
-  return new Promise(resolve => {
-    const id = message.id || crypto.randomUUID();
-    if (seen.has(id)) { resolve(true); return; }
-    if (pending.size >= MAX_PENDING) { resolve(false); return; }
-    const item = { id, message, resolve, timer: setTimeout(() => {
-      pending.delete(id); resolve(false);
-    }, ACK_TIMEOUT_MS) };
-    pending.set(id, item);
-    const waiter = waiters.shift();
-    if (waiter) waiter();
-  });
+function wakeWaiter() {
+  const waiter = waiters.shift();
+  if (waiter) waiter();
+}
+function enqueue(message) {
+  const id = message.id || crypto.randomUUID();
+  if (acknowledged.has(id) || pending.has(id)) return { ok: true, duplicate: true };
+  if (pending.size >= MAX_PENDING) return { ok: false, reason: 'queue_full' };
+  const item = { id, message: { ...message, id }, createdAt: Date.now(), leaseUntil: 0, attempts: 0, timer: null, resolve: null };
+  item.promise = new Promise(resolve => { item.resolve = resolve; });
+  item.timer = setTimeout(() => {
+    if (!pending.has(id)) return;
+    pending.delete(id);
+    item.resolve(false);
+  }, ACK_TIMEOUT_MS);
+  pending.set(id, item);
+  wakeWaiter();
+  return { ok: true, duplicate: false, item };
 }
 function nextMessage() {
-  for (const item of pending.values()) return item;
+  const now = Date.now();
+  for (const item of pending.values()) {
+    if (item.leaseUntil <= now) {
+      item.leaseUntil = now + 5000;
+      item.attempts += 1;
+      return item;
+    }
+  }
   return null;
+}
+function waitForMessage(ms) {
+  return new Promise(resolve => {
+    const timer = setTimeout(resolve, ms);
+    waiters.push(() => { clearTimeout(timer); resolve(); });
+  });
 }
 const app = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  if (req.method === 'GET' && url.pathname === '/health') return json(res, 200, { ok: true, service: 'almasar-meta-relay', pending: pending.size });
+  if (req.method === 'GET' && url.pathname === '/health') {
+    return json(res, 200, { ok: true, service: 'almasar-meta-relay', pending: pending.size, acknowledged: acknowledged.size, configured: { verifyToken: Boolean(VERIFY_TOKEN), appToken: Boolean(APP_TOKEN), appSecret: Boolean(GRAPH_APP_SECRET) } });
+  }
   if (req.method === 'GET' && url.pathname === '/webhook') {
     const mode = url.searchParams.get('hub.mode');
     const token = url.searchParams.get('hub.verify_token');
     const challenge = url.searchParams.get('hub.challenge');
-    if (mode === 'subscribe' && VERIFY_TOKEN && token === VERIFY_TOKEN) { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end(challenge || ''); }
+    if (mode === 'subscribe' && VERIFY_TOKEN && safeEqualText(token, VERIFY_TOKEN)) {
+      res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store' });
+      return res.end(challenge || '');
+    }
     return json(res, 403, { error: 'verification_failed' });
   }
   if (req.method === 'POST' && url.pathname === '/webhook') {
@@ -91,7 +122,10 @@ const app = http.createServer(async (req, res) => {
     try { payload = JSON.parse(raw.toString('utf8')); } catch { return json(res, 400, { error: 'invalid_json' }); }
     const messages = extractMessages(payload);
     if (!messages.length) return json(res, 200, { ok: true, received: 0 });
-    const results = await Promise.all(messages.map(deliver));
+    const enqueued = messages.map(enqueue);
+    if (enqueued.some(x => !x.ok)) return json(res, 503, { error: 'queue_full', retry: true });
+    const fresh = enqueued.filter(x => x.item);
+    const results = await Promise.all(fresh.map(x => x.item.promise));
     if (results.some(ok => !ok)) return json(res, 503, { error: 'device_not_confirmed', retry: true });
     return json(res, 200, { ok: true, received: messages.length, device_confirmed: true });
   }
@@ -99,21 +133,21 @@ const app = http.createServer(async (req, res) => {
     if (!authorized(req)) return json(res, 401, { error: 'unauthorized' });
     let item = nextMessage();
     if (!item) {
-      await new Promise(resolve => {
-        const timer = setTimeout(resolve, 15000);
-        waiters.push(() => { clearTimeout(timer); resolve(); });
-      });
+      await waitForMessage(12000);
       item = nextMessage();
     }
-    return item ? json(res, 200, { id: item.id, message: item.message }) : json(res, 204, {});
+    return item ? json(res, 200, { id: item.id, message: item.message, attempts: item.attempts }) : json(res, 204, {});
   }
   if (url.pathname.startsWith('/api/ack/') && req.method === 'POST') {
     if (!authorized(req)) return json(res, 401, { error: 'unauthorized' });
     const id = decodeURIComponent(url.pathname.slice('/api/ack/'.length));
+    if (acknowledged.has(id)) return json(res, 200, { ok: true, duplicate: true });
     const item = pending.get(id);
     if (!item) return json(res, 404, { error: 'not_found' });
-    clearTimeout(item.timer); pending.delete(id); seen.set(id, Date.now());
-    while (seen.size > 10000) seen.delete(seen.keys().next().value);
+    clearTimeout(item.timer);
+    pending.delete(id);
+    acknowledged.set(id, Date.now());
+    while (acknowledged.size > 20000) acknowledged.delete(acknowledged.keys().next().value);
     item.resolve(true);
     return json(res, 200, { ok: true });
   }
