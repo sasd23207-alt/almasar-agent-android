@@ -153,4 +153,5 @@ const app = http.createServer(async (req, res) => {
   }
   return json(res, 404, { error: 'not_found' });
 });
-app.listen(PORT, '0.0.0.0', () => process.stdout.write('Almasar relay listening on ' + PORT + '\n'));
+if (require.main === module) app.listen(PORT, '0.0.0.0', () => process.stdout.write('Almasar relay listening on ' + PORT + '\n'));
+module.exports = { app, extractMessages, verifySignature };
