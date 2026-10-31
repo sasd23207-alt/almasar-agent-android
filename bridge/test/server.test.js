@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 process.env.META_VERIFY_TOKEN = 'verify-test-token';
 process.env.APP_DEVICE_TOKEN = 'device-test-token';
 process.env.META_APP_SECRET = 'meta-test-secret';
-const { app, extractMessages } = require('./server');
+const { app, extractMessages } = require('../server');
 
 let base;
 before(async () => {
