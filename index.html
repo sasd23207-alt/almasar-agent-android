@@ -99,6 +99,22 @@ table tr:nth-child(even) td{background:color-mix(in srgb,var(--bg) 40%,transpare
 
 <div class="card noprint">
   <h2>وكيل الاستخراج</h2>
+  <section class="card" id="waBusinessConnect" style="margin-top:12px">
+    <h2>ربط WhatsApp Business</h2>
+    <p class="muted">أدخل رابط جسر الاستقبال ورمز الجهاز مرة واحدة. عند تشغيل الاتصال، يحفظ التطبيق كل رسالة واردة في قاعدة البيانات المحلية قبل تأكيد استلامها للجسر.</p>
+    <label>رابط جسر الاستقبال</label>
+    <input id="relayUrl" inputmode="url" placeholder="https://your-relay.onrender.com">
+    <label>رمز الجهاز</label>
+    <input id="relayToken" type="password" autocomplete="off" placeholder="رمز APP_DEVICE_TOKEN">
+    <div class="row">
+      <button id="relaySave" type="button">حفظ الربط</button>
+      <button id="relayStart" type="button" class="primary">تشغيل استقبال الرسائل</button>
+      <button id="relayStop" type="button" class="danger">إيقاف</button>
+    </div>
+    <p id="relayStatus" class="muted" role="status">غير متصل</p>
+    <p class="muted">تنبيه: الاتصال الحالي يعمل أثناء تشغيل التطبيق ووجوده في الواجهة. لا تعتبره مراقبة خلفية دائمة حتى نضيف خدمة Android ونختبرها على هاتف حقيقي.</p>
+  </section>
+
   <p class="muted">يقرأ الرسائل المستوردة ويقترح المعاملات. كل مقترح يمر بوكيل التحقق ثم يُسجَّل «بانتظار مراجعتك» ولا يدخل الرصيد حتى تؤكده. يعمل داخل التطبيق بدون مفتاح وبدون إنترنت، ويفهم صيغ التحويل والدفع بالعربية واللهجة الليبية.</p>
   <label>اسمك كما يظهر في المحادثة (يمكن أكثر من اسم، مفصولة بفاصلة)</label>
   <input id="ownerNameInput" placeholder="مثال: سالم">
@@ -1008,7 +1024,7 @@ async function startApp() {
   await checkSharedInbox();
   if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
 }
-startApp();
+window.almasarReady = startApp();
 
 // ===== v3 navigation: groups the existing cards into four tabs =====
 const TAB_CARDS = { merchants: [2, 3], ledger: [6], add: [7], agent: [0, 4, 5, 8], settings: [1, 9, 10] };
@@ -1071,5 +1087,5 @@ el('backToMerchants').addEventListener('click', () => showTab('merchants'));
 el('mhAdd').addEventListener('click', () => showTab('add'));
 renderMerchantList();
 </script>
-</body>
+<script src="bridge-client.js"></script>\n</body>
 </html>
