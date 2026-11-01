@@ -68,7 +68,8 @@ function wakeWaiter() {
 }
 function enqueue(message) {
   const id = message.id || crypto.randomUUID();
-  if (acknowledged.has(id) || pending.has(id)) return { ok: true, duplicate: true };
+  if (acknowledged.has(id)) return { ok: true, duplicate: true, acknowledged: true };
+  if (pending.has(id)) return { ok: true, duplicate: true, item: pending.get(id) };
   if (pending.size >= MAX_PENDING) return { ok: false, reason: 'queue_full' };
   const item = { id, message: { ...message, id }, createdAt: Date.now(), leaseUntil: 0, attempts: 0, timer: null, resolve: null };
   item.promise = new Promise(resolve => { item.resolve = resolve; });
@@ -124,8 +125,8 @@ const app = http.createServer(async (req, res) => {
     if (!messages.length) return json(res, 200, { ok: true, received: 0 });
     const enqueued = messages.map(enqueue);
     if (enqueued.some(x => !x.ok)) return json(res, 503, { error: 'queue_full', retry: true });
-    const fresh = enqueued.filter(x => x.item);
-    const results = await Promise.all(fresh.map(x => x.item.promise));
+    const waiting = enqueued.filter(x => x.item);
+    const results = await Promise.all(waiting.map(x => x.item.promise));
     if (results.some(ok => !ok)) return json(res, 503, { error: 'device_not_confirmed', retry: true });
     return json(res, 200, { ok: true, received: messages.length, device_confirmed: true });
   }
