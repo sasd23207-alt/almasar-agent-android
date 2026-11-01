@@ -1,4 +1,4 @@
-name = "almasar-whatsapp-relay"
+name = "cloudflare-d1-relay"
 main = "worker.js"
 compatibility_date = "2026-11-01"
 
