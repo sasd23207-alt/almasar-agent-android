@@ -474,7 +474,7 @@ function saveState() {
   if (persistBlocked) { showAlert('تحذير: لم يُحفظ هذا التغيير. تعذّر فتح قاعدة بيانات التطبيق، فأوقفت الحفظ حتى لا أمسح بياناتك القديمة. أغلق التطبيق وافتحه من جديد ولا تُدخل شيئًا قبل ذلك.'); return false; }
   writeChain = writeChain
     .then(() => runRequest('records', 'readwrite', (store) => store.put(state, STATE_KEY)))
-    .catch(() => { showAlert('تحذير: فشل حفظ آخر تغيير على هذا الجهاز. خذ نسخة احتياطية الآن من الإعدادات.'); document.getElementById('storageNotice').textContent = 'تعذّر الحفظ في قاعدة البيانات المحلية. احفظ نسخة احتياطية الآن.'; });
+    .catch(() => { persistBlocked = true; showAlert('توقف الاستقبال للحماية: فشل حفظ البيانات محلياً. لم يتم تأكيد الرسالة للجسر. افحص مساحة الجهاز وأعد فتح التطبيق بعد حل المشكلة.'); document.getElementById('storageNotice').textContent = 'فشل الحفظ المحلي؛ أُوقف تأكيد رسائل واتساب حتى لا تضيع البيانات.'; });
   return true;
 }
 function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
