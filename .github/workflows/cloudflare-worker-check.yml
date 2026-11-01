@@ -1,0 +1,23 @@
+name: Cloudflare D1 Relay Checks
+on:
+  push:
+    branches: [cloudflare-d1-relay]
+    paths:
+      - 'cloudflare/**'
+      - '.github/workflows/cloudflare-worker-check.yml'
+  pull_request:
+    paths:
+      - 'cloudflare/**'
+      - '.github/workflows/cloudflare-worker-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check cloudflare/worker.js
