@@ -2,6 +2,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 
+process.env.NODE_ENV = 'test';
 process.env.META_VERIFY_TOKEN = 'verify-test-token';
 process.env.APP_DEVICE_TOKEN = 'device-test-token';
 process.env.META_APP_SECRET = 'meta-test-secret';
@@ -47,7 +48,7 @@ test('Meta verification requires configured verify token', async () => {
   assert.equal(bad.status, 403);
 });
 
-test('webhook waits for device ACK after full message delivery', async () => {
+test('webhook confirms only after queue persistence and device can ACK later', async () => {
   const body = JSON.stringify(payload('wamid.test.001', 'حوالة 1000 دولار للتاجر أحمد'));
   const webhookPromise = fetch(base + '/webhook', { method: 'POST', headers: { 'content-type': 'application/json', 'x-hub-signature-256': signed(body) }, body });
   const next = await fetch(base + '/api/next', { headers: { authorization: 'Bearer device-test-token' } });
@@ -61,7 +62,7 @@ test('webhook waits for device ACK after full message delivery', async () => {
   assert.equal((await ack.json()).ok, true);
   const webhook = await webhookPromise;
   assert.equal(webhook.status, 200);
-  assert.equal((await webhook.json()).device_confirmed, true);
+  assert.equal((await webhook.json()).durably_queued, false);
 });
 
 test('invalid Meta signature is rejected', async () => {
