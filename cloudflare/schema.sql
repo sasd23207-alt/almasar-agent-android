@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS relay_messages (message_id TEXT PRIMARY KEY NOT NULL,payload TEXT NOT NULL,created_at INTEGER NOT NULL,lease_until INTEGER,attempts INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS relay_messages_delivery_idx ON relay_messages(lease_until,created_at,message_id);
+CREATE TABLE IF NOT EXISTS relay_acknowledged(message_id TEXT PRIMARY KEY NOT NULL,acknowledged_at INTEGER NOT NULL);
