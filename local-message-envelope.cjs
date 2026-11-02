@@ -3,7 +3,7 @@
 const CHAT_TYPES = new Set(['DIRECT', 'GROUP', 'BROADCAST', 'NEWSLETTER', 'OTHER']);
 const MAX_TEXT_LENGTH = 64 * 1024;
 const MAX_ID_LENGTH = 512;
-const ISO_WITH_ZONE = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?(?:Z|[+-]\\d{2}:\\d{2})$/;
+const ISO_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
 const FORBIDDEN_METADATA_KEY = /(token|secret|password|credential|authorization|session|signal.?key|private.?key|qr|auth)/i;
 
 function requiredString(value, field, maxLength = MAX_ID_LENGTH) {
