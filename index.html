@@ -188,6 +188,8 @@ table tr:nth-child(even) td{background:color-mix(in srgb,var(--bg) 40%,transpare
 </nav>
 
 
+<script src="local-message-envelope.cjs"></script>
+<script src="local-message-inbox.cjs"></script>
 <script>
 // <pure-logic>
 const CURRENCY_DECIMALS = { LYD: 3, USD: 2, EUR: 2, GBP: 2, CHF: 2, TRY: 2, EGP: 2, TND: 3, DZD: 2, MAD: 2, SAR: 2, AED: 2, QAR: 2, KWD: 3, BHD: 3, OMR: 3, JOD: 3, CNY: 2, INR: 2, PKR: 2, CAD: 2, AUD: 2, SDG: 2, RUB: 2 };
@@ -423,18 +425,29 @@ const ui = { merchantId: null, monthValue: '', editingId: null, sourceMessageId:
 // ---- local database (IndexedDB). The service worker opens the same database to drop shared chats into 'inbox'.
 function openDatabase() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, 1);
+    const request = indexedDB.open(DATABASE_NAME, 2);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains('records')) { db.createObjectStore('records'); }
       if (!db.objectStoreNames.contains('inbox')) { db.createObjectStore('inbox', { keyPath: 'id' }); }
+      if (!db.objectStoreNames.contains('inboundEvents')) {
+        const events = db.createObjectStore('inboundEvents', { keyPath: 'eventKey' });
+        events.createIndex('status', 'status', { unique: false });
+        events.createIndex('receivedAt', 'receivedAt', { unique: false });
+      }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => { request.result.onversionchange = () => request.result.close(); resolve(request.result); };
     request.onerror = () => reject(request.error);
   });
 }
 let databasePromise = null;
 function database() { if (!databasePromise) { databasePromise = openDatabase(); } return databasePromise; }
+// Durable, idempotent landing zone for future local WhatsApp adapters. It never posts to the ledger.
+window.almasarStoreInboundEnvelope = async function (envelope) {
+  const db = await database();
+  const repository = window.AlmasarLocalMessageInbox.createRepository(db, window.AlmasarLocalMessageEnvelope);
+  return repository.put(envelope);
+};
 async function runRequest(storeName, mode, action) {
   const db = await database();
   return new Promise((resolve, reject) => {
