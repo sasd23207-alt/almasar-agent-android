@@ -16,7 +16,7 @@ function fixture(overrides = {}) {
 test('accepts a valid immutable inbound envelope', () => {
   const item = fixture();
   assert.equal(validateEnvelope(item), item);
-  assert.match(makeEventKey(item), /^v1\\|/);
+  assert.match(makeEventKey(item), /^v1\|/);
 });
 
 test('same source identity produces the same key despite changed text', () => {
