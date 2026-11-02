@@ -2,8 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { makeEventKey, validateEnvelope } = require('../local-message-envelope.cjs');
-const { createRepository } = require('../local-message-inbox.cjs');
+const { makeEventKey, validateEnvelope } = require('../local-message-envelope.js');
+const { createRepository } = require('../local-message-inbox.js');
 
 class FakeRequest {}
 class FakeStore {
