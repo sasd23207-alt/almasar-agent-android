@@ -1,0 +1,8 @@
+name = "cloudflare-d1-relay"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "almasar-relay-db"
+database_id = "105cb4c4-6206-4b2a-b652-df087c1a6636"
