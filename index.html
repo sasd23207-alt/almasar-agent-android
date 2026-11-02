@@ -443,11 +443,14 @@ function openDatabase() {
 let databasePromise = null;
 function database() { if (!databasePromise) { databasePromise = openDatabase(); } return databasePromise; }
 // Durable, idempotent landing zone for future local WhatsApp adapters. It never posts to the ledger.
-window.almasarStoreInboundEnvelope = async function (envelope) {
-  const db = await database();
-  const repository = window.AlmasarLocalMessageInbox.createRepository(db, window.AlmasarLocalMessageEnvelope);
-  return repository.put(envelope);
-};
+function localInboundRepository() {
+  return database().then((db) => window.AlmasarLocalMessageInbox.createRepository(db, window.AlmasarLocalMessageEnvelope));
+}
+window.almasarStoreInboundEnvelope = async (envelope) => (await localInboundRepository()).put(envelope);
+window.almasarListInboundEvents = async () => (await localInboundRepository()).list();
+window.almasarGetInboundEvent = async (eventKey) => (await localInboundRepository()).get(eventKey);
+window.almasarUpdateInboundEventStatus = async (eventKey, status, lastError) =>
+  (await localInboundRepository()).updateStatus(eventKey, status, lastError);
 async function runRequest(storeName, mode, action) {
   const db = await database();
   return new Promise((resolve, reject) => {
