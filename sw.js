@@ -6,7 +6,7 @@
  * It never touches the ledger itself and never sends anything over the network.
  */
 const CACHE_NAME = 'almasar-shell-v7';
-const SHELL_FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
+const SHELL_FILES = ['./', './index.html', './local-message-envelope.js', './local-message-inbox.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
