@@ -207,6 +207,29 @@ jobs:
               }
           }
           JAVA
+      - name: Set distinct local agent launcher icon
+        run: |
+          mkdir -p android/app/src/main/res/drawable
+          cat > android/app/src/main/res/drawable/masar_agent_icon.xml <<'XML'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#102B3A" android:pathData="M0,0h108v108h-108z"/>
+              <path android:fillColor="#FFFFFFFF" android:pathData="M22,25h64a8,8 0,0 1,8 8v38a8,8 0,0 1,-8 8h-24l-17,13v-13h-23a8,8 0,0 1,-8 -8v-38a8,8 0,0 1,8 -8z"/>
+              <path android:fillColor="#FF0B6E4F" android:pathData="M34,43h40v6h-40zM34,56h25v6h-25z"/>
+              <path android:fillColor="#FF0B6E4F" android:pathData="M67,60l7,7 14,-16 5,5 -19,22 -12,-12z"/>
+          </vector>
+          XML
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          p = "android/app/src/main/AndroidManifest.xml"
+          a = "{http://schemas.android.com/apk/res/android}"
+          t = ET.parse(p)
+          app = t.getroot().find("application")
+          if app is None:
+              raise SystemExit("application element missing")
+          app.set(a + "icon", "@drawable/masar_agent_icon")
+          t.write(p, encoding="utf-8", xml_declaration=True)
+          PY
       - name: Build debug APK
         run: |
           cd android
