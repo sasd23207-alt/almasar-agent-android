@@ -5,7 +5,7 @@
  *    'inbox' of the local database; the app imports them when it opens.
  * It never touches the ledger itself and never sends anything over the network.
  */
-const CACHE_NAME = 'almasar-shell-v6';
+const CACHE_NAME = 'almasar-shell-v7';
 const SHELL_FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -39,13 +39,18 @@ self.addEventListener('fetch', (event) => {
 
 function openInboxDatabase() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('almasar-db', 1);
+    const request = indexedDB.open('almasar-db', 2);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains('records')) { db.createObjectStore('records'); }
       if (!db.objectStoreNames.contains('inbox')) { db.createObjectStore('inbox', { keyPath: 'id' }); }
+      if (!db.objectStoreNames.contains('inboundEvents')) {
+        const events = db.createObjectStore('inboundEvents', { keyPath: 'eventKey' });
+        events.createIndex('status', 'status', { unique: false });
+        events.createIndex('receivedAt', 'receivedAt', { unique: false });
+      }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => { request.result.onversionchange = () => request.result.close(); resolve(request.result); };
     request.onerror = () => reject(request.error);
   });
 }
