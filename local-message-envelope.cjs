@@ -62,4 +62,6 @@ function makeEventKey(envelope) {
   return 'v1|' + parts.map((part) => `${part.length}:${part}`).join('|');
 }
 
-module.exports = { MAX_TEXT_LENGTH, makeEventKey, validateEnvelope };
+const api = { MAX_TEXT_LENGTH, makeEventKey, validateEnvelope };
+if (typeof module !== 'undefined' && module.exports) module.exports = api;
+if (typeof globalThis !== 'undefined') globalThis.AlmasarLocalMessageEnvelope = api;
