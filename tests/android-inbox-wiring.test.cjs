@@ -32,3 +32,9 @@ test('app exposes only inbox operations; ledger mutation is not part of the inbo
   assert.match(app, /window\.almasarUpdateInboundEventStatus/);
   assert.doesNotMatch(app.slice(app.indexOf('function localInboundRepository'), app.indexOf('async function runRequest')), /state\.transactions\.push/);
 });
+
+test('service worker precaches the local inbox modules for offline startup', () => {
+  const worker = fs.readFileSync('sw.js', 'utf8');
+  assert.ok(worker.includes("'./local-message-envelope.js'"));
+  assert.ok(worker.includes("'./local-message-inbox.js'"));
+});
