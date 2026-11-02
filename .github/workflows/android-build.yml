@@ -99,7 +99,7 @@ jobs:
           ET.indent(tree, space="    ")
           tree.write(path, encoding="utf-8", xml_declaration=True)
           PY
-          mkdir -p android/app/src/main/java/ly/almasar/agent/next
+          mkdir -p android/app/src/main/java/ly/almasar/agent/localbot
           cat > android/app/src/main/java/ly/almasar/agent/next/MainActivity.java <<'JAVA'
           package ly.almasar.agent.localbot;
 
