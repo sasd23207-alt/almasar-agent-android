@@ -27,6 +27,8 @@ jobs:
           mkdir -p www
           cp index.html www/
           [ ! -f bridge-client.js ] || cp bridge-client.js www/
+          cp local-message-envelope.js www/
+          cp local-message-inbox.js www/
           [ ! -f manifest.webmanifest ] || cp manifest.webmanifest www/
           [ ! -f sw.js ] || cp sw.js www/
           [ ! -f icon-192.png ] || cp icon-192.png www/
