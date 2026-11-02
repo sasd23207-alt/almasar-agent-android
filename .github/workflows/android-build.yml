@@ -98,6 +98,11 @@ jobs:
               ET.SubElement(filt, "data", {android + "mimeType": mime})
           ET.indent(tree, space="    ")
           tree.write(path, encoding="utf-8", xml_declaration=True)
+          # Ensure Android's namespace prefix remains declared after XML serialization.
+          manifest = open(path, encoding="utf-8").read()
+          if "xmlns:android=" not in manifest:
+              manifest = manifest.replace("<manifest", '<manifest xmlns:android="http://schemas.android.com/apk/res/android"', 1)
+              open(path, "w", encoding="utf-8").write(manifest)
           PY
           mkdir -p android/app/src/main/java/ly/almasar/agent/localbot
           cat > android/app/src/main/java/ly/almasar/agent/localbot/MainActivity.java <<'JAVA'
@@ -231,6 +236,10 @@ jobs:
               raise SystemExit("application element missing")
           app.set(a + "icon", "@drawable/masar_agent_icon")
           t.write(p, encoding="utf-8", xml_declaration=True)
+          manifest = open(p, encoding="utf-8").read()
+          if "xmlns:android=" not in manifest:
+              manifest = manifest.replace("<manifest", '<manifest xmlns:android="http://schemas.android.com/apk/res/android"', 1)
+              open(p, "w", encoding="utf-8").write(manifest)
           PY
       - name: Build debug APK
         run: |
