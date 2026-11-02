@@ -50,8 +50,8 @@ jobs:
           EOF
           cat > capacitor.config.json <<'EOF'
           {
-            "appId": "ly.almasar.agent.next",
-            "appName": "المسار - نسخة جديدة",
+            "appId": "ly.almasar.agent.localbot",
+            "appName": "المسار - الوكيل المحلي",
             "webDir": "www",
             "bundledWebRuntime": false,
             "server": {
@@ -101,7 +101,7 @@ jobs:
           PY
           mkdir -p android/app/src/main/java/ly/almasar/agent/next
           cat > android/app/src/main/java/ly/almasar/agent/next/MainActivity.java <<'JAVA'
-          package ly.almasar.agent.next;
+          package ly.almasar.agent.localbot;
 
           import android.content.Intent;
           import android.content.SharedPreferences;
