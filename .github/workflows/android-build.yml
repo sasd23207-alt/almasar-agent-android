@@ -221,6 +221,8 @@ jobs:
           XML
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
+          ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
+          ET.register_namespace("tools", "http://schemas.android.com/tools")
           p = "android/app/src/main/AndroidManifest.xml"
           a = "{http://schemas.android.com/apk/res/android}"
           t = ET.parse(p)
