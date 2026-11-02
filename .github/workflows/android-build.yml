@@ -20,6 +20,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Run local message contract tests
+        run: node --test tests/*.test.cjs
       - name: Prepare web assets
         run: |
           mkdir -p www
