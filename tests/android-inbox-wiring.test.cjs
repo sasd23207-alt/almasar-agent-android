@@ -38,3 +38,20 @@ test('service worker precaches the local inbox modules for offline startup', () 
   assert.ok(worker.includes("'./local-message-envelope.js'"));
   assert.ok(worker.includes("'./local-message-inbox.js'"));
 });
+
+test('Android build declares a WhatsApp Business-only notification listener service', () => {
+  const workflow = fs.readFileSync('.github/workflows/android-build.yml', 'utf8');
+  assert.match(workflow, /WhatsAppNotificationListenerService/);
+  assert.match(workflow, /android\.permission\.BIND_NOTIFICATION_LISTENER_SERVICE/);
+  assert.match(workflow, /com\.whatsapp\.w4b/);
+  assert.match(workflow, /hasWhatsAppNotificationAccess/);
+  assert.match(workflow, /getPendingWhatsAppNotifications/);
+});
+
+test('app exposes notification permission controls and stages received alerts in the local inbox', () => {
+  const app = fs.readFileSync('index.html', 'utf8');
+  assert.match(app, /enableNotificationAccess/);
+  assert.match(app, /syncWhatsAppNotifications/);
+  assert.match(app, /wa-notification-/);
+  assert.match(app, /whatsapp-business-notification/);
+});
