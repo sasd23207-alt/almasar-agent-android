@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, local-phone-bot]
+    branches: [main, local-phone-bot, merchant-branded-release]
 
 permissions:
   contents: read
