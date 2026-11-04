@@ -78,6 +78,15 @@ table tr:nth-child(even) td{background:color-mix(in srgb,var(--bg) 40%,transpare
 <main>
 <header class="appbar"><div class="brand"><div class="logo"><img src="icon-192.png" alt=""></div><div><h1>المسار - الوكيل المحلي</h1><small>إدارة الحوالات واستقبال الرسائل على جهازك</small></div></div></header>
 <div id="statusBar" class="card noprint muted"></div>
+<section class="card noprint" id="notificationAccessCard">
+  <h2>استقبال رسائل واتساب بزنس في الخلفية</h2>
+  <p id="notificationAccessStatus" class="muted">جارٍ فحص صلاحية الإشعارات…</p>
+  <div class="row">
+    <button type="button" class="primary" id="enableNotificationAccess">تفعيل صلاحية الإشعارات</button>
+    <button type="button" id="syncWhatsAppNotifications">مزامنة الرسائل الآن</button>
+  </div>
+  <p class="muted">يلتقط التطبيق نص الإشعارات الظاهرة من واتساب بزنس فقط ويحفظها على هذا الجهاز. الرسائل ذات معاينة مخفية أو غير ظاهرة في الإشعار لن يمكن قراءتها.</p>
+</section>
 <div class="card noprint" id="inboxCard" hidden>
   <h2>محادثة وصلتك من واتساب</h2>
   <div id="inboxList"></div>
@@ -987,6 +996,49 @@ function renderInbox(items) {
 async function checkSharedInbox() {
   try { renderInbox(await runRequest('inbox', 'readonly', (store) => store.getAll())); } catch (error) { /* no inbox yet */ }
 }
+
+async function refreshWhatsAppNotificationStatus() {
+  const native = window.AlmasarNative;
+  const status = el('notificationAccessStatus');
+  if (!native || typeof native.hasWhatsAppNotificationAccess !== 'function') {
+    status.textContent = 'هذه الميزة تحتاج نسخة أندرويد المثبّتة، وليست متاحة في المتصفح.';
+    return false;
+  }
+  let enabled = false;
+  try { enabled = !!native.hasWhatsAppNotificationAccess(); } catch (error) {}
+  status.textContent = enabled
+    ? 'الصلاحية مفعّلة. التطبيق يحفظ إشعارات واتساب بزنس الواردة محلياً.'
+    : 'الصلاحية غير مفعّلة. اضغط زر التفعيل ثم اختر «المسار - استقبال واتساب بزنس» واسمح بالوصول.';
+  return enabled;
+}
+async function syncWhatsAppNotifications() {
+  const native = window.AlmasarNative;
+  if (!native || typeof native.getPendingWhatsAppNotifications !== 'function') return;
+  let events = [];
+  try { events = JSON.parse(native.getPendingWhatsAppNotifications() || '[]'); } catch (error) { return; }
+  if (!Array.isArray(events) || events.length === 0) return;
+  const existing = await runRequest('inbox', 'readonly', (store) => store.getAll());
+  const known = new Set(existing.map((item) => item.id));
+  let imported = 0;
+  for (const event of events) {
+    if (!event || !event.id || !event.text) continue;
+    const id = 'wa-notification-' + event.id;
+    if (known.has(id)) continue;
+    const item = {
+      id,
+      name: event.title || 'واتساب بزنس',
+      text: event.text,
+      source: 'whatsapp-business-notification',
+      receivedAt: event.receivedAt || Date.now()
+    };
+    await runRequest('inbox', 'readwrite', (store) => store.put(item));
+    known.add(id);
+    imported++;
+  }
+  try { native.clearPendingWhatsAppNotifications(); } catch (error) {}
+  await checkSharedInbox();
+  if (imported) el('notificationAccessStatus').textContent = 'تم استلام وحفظ ' + imported + ' إشعاراً جديداً من واتساب بزنس على هذا الجهاز.';
+}
 el('inboxList').addEventListener('click', async (event) => {
   const id = event.target.dataset.importInbox;
   if (!id) { return; }
@@ -1038,6 +1090,12 @@ async function startApp() {
     el('statusBar').textContent += ' — لم أستطع تجهيز النص القادم من واتساب؛ لم أغيّر كشف الحساب.';
   }
   await checkSharedInbox();
+  await refreshWhatsAppNotificationStatus();
+  await syncWhatsAppNotifications();
+  setInterval(async () => {
+    await refreshWhatsAppNotificationStatus();
+    await syncWhatsAppNotifications();
+  }, 5000);
   if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
 }
 window.almasarReady = startApp();
@@ -1101,6 +1159,18 @@ el('merchantList').addEventListener('click', (event) => {
 });
 el('backToMerchants').addEventListener('click', () => showTab('merchants'));
 el('mhAdd').addEventListener('click', () => showTab('add'));
+el('enableNotificationAccess').addEventListener('click', () => {
+  const native = window.AlmasarNative;
+  if (native && typeof native.openWhatsAppNotificationSettings === 'function') {
+    native.openWhatsAppNotificationSettings();
+  } else {
+    el('notificationAccessStatus').textContent = 'افتح التطبيق من نسخة أندرويد لتفعيل الصلاحية.';
+  }
+});
+el('syncWhatsAppNotifications').addEventListener('click', async () => {
+  await syncWhatsAppNotifications();
+  await refreshWhatsAppNotificationStatus();
+});
 renderMerchantList();
 </script>
 <script src="bridge-client.js"></script>\n</body>
