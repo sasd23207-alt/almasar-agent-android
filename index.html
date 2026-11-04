@@ -1011,33 +1011,114 @@ async function refreshWhatsAppNotificationStatus() {
     : 'الصلاحية غير مفعّلة. اضغط زر التفعيل ثم اختر «المسار - استقبال واتساب بزنس» واسمح بالوصول.';
   return enabled;
 }
+let notificationSyncRunning = false;
+
+function normalizeContactName(value) {
+  return normalizeLine(String(value || '')).toLocaleLowerCase('ar')
+    .replace(/[\u064b-\u065f\u0670]/g, '')
+    .replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي')
+    .replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+// Automatic assignment is deliberately exact: ambiguous or unknown contacts stay in inbox.
+function findMerchantForWhatsAppContact(contactTitle) {
+  const key = normalizeContactName(contactTitle);
+  if (!key) return null;
+  const matches = state.merchants.filter((merchant) => {
+    const names = [merchant.name, ...(Array.isArray(merchant.whatsappNames) ? merchant.whatsappNames : [])];
+    return names.some((name) => normalizeContactName(name) === key);
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function notificationTime(receivedAt) {
+  const date = new Date(Number(receivedAt) || Date.now());
+  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 19);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 async function syncWhatsAppNotifications() {
+  if (notificationSyncRunning) return;
   const native = window.AlmasarNative;
   if (!native || typeof native.getPendingWhatsAppNotifications !== 'function') return;
-  let events = [];
-  try { events = JSON.parse(native.getPendingWhatsAppNotifications() || '[]'); } catch (error) { return; }
-  if (!Array.isArray(events) || events.length === 0) return;
-  const existing = await runRequest('inbox', 'readonly', (store) => store.getAll());
-  const known = new Set(existing.map((item) => item.id));
-  let imported = 0;
-  for (const event of events) {
-    if (!event || !event.id || !event.text) continue;
-    const id = 'wa-notification-' + event.id;
-    if (known.has(id)) continue;
-    const item = {
-      id,
-      name: event.title || 'واتساب بزنس',
-      text: event.text,
-      source: 'whatsapp-business-notification',
-      receivedAt: event.receivedAt || Date.now()
-    };
-    await runRequest('inbox', 'readwrite', (store) => store.put(item));
-    known.add(id);
-    imported++;
+  notificationSyncRunning = true;
+  try {
+    let events = [];
+    try { events = JSON.parse(native.getPendingWhatsAppNotifications() || '[]'); } catch (error) { return; }
+    if (!Array.isArray(events) || events.length === 0) return;
+
+    const staged = await runRequest('inbox', 'readonly', (store) => store.getAll());
+    const stagedIds = new Set(staged.map((item) => item.id));
+    const knownEventIds = new Set(state.messages.map((message) => message.sourceEventId).filter(Boolean));
+    const merchantsToAnalyze = new Set();
+    let imported = 0, assigned = 0, needsAssignment = 0;
+
+    for (const event of events) {
+      if (!event || !event.id || !String(event.text || '').trim()) continue;
+      const eventId = String(event.id);
+      if (knownEventIds.has(eventId)) continue;
+
+      const merchant = findMerchantForWhatsAppContact(event.title);
+      if (merchant) {
+        const message = {
+          id: 'wa-' + newId(),
+          merchantId: merchant.id,
+          key: 'whatsapp-notification|' + eventId,
+          sourceEventId: eventId,
+          at: notificationTime(event.receivedAt),
+          sender: event.title || merchant.name,
+          text: String(event.text).trim(),
+          freeText: false,
+          analyzed: false,
+          source: 'whatsapp-business-notification'
+        };
+        state.messages.push(message);
+        knownEventIds.add(eventId);
+        merchantsToAnalyze.add(merchant.id);
+        assigned++;
+      } else {
+        const id = 'wa-notification-' + eventId;
+        if (!stagedIds.has(id)) {
+          await runRequest('inbox', 'readwrite', (store) => store.put({
+            id,
+            name: event.title || 'واتساب بزنس',
+            text: String(event.text).trim(),
+            source: 'whatsapp-business-notification',
+            receivedAt: event.receivedAt || Date.now()
+          }));
+          stagedIds.add(id);
+        }
+        needsAssignment++;
+      }
+      imported++;
+    }
+
+    if (imported) {
+      saveState();
+      await writeChain;
+      if (persistBlocked) return; // Keep native events until the local ledger database is healthy.
+      try { native.clearPendingWhatsAppNotifications(); } catch (error) {}
+      await checkSharedInbox();
+
+      const previousMerchantId = ui.merchantId;
+      for (const merchantId of merchantsToAnalyze) {
+        const merchant = state.merchants.find((item) => item.id === merchantId);
+        if (!merchant || !Array.isArray(merchant.ownerNames) || merchant.ownerNames.length === 0) continue;
+        ui.merchantId = merchantId;
+        el('ownerNameInput').value = merchant.ownerNames.join('، ');
+        el('autoConfirmInput').checked = Boolean(state.settings.autoConfirmOk);
+        await analyzeNewMessages();
+      }
+      ui.merchantId = previousMerchantId;
+      renderAll();
+      el('notificationAccessStatus').textContent =
+        `استُقبلت ${imported} رسالة؛ أُسنِدت ${assigned} تلقائياً إلى التجار المطابقين، وبقيت ${needsAssignment} في صندوق الوارد لتحديد أصحابها. الحركات المستخرجة غير المؤكدة تبقى للمراجعة ولا تدخل الرصيد قبل اعتمادها.`;
+    }
+  } catch (error) {
+    el('notificationAccessStatus').textContent = 'تعذّر إكمال معالجة إشعار واتساب؛ أبقينا الحفظ المحلي كما هو وسنحاول مجدداً.';
+  } finally {
+    notificationSyncRunning = false;
   }
-  try { native.clearPendingWhatsAppNotifications(); } catch (error) {}
-  await checkSharedInbox();
-  if (imported) el('notificationAccessStatus').textContent = 'تم استلام وحفظ ' + imported + ' إشعاراً جديداً من واتساب بزنس على هذا الجهاز.';
 }
 el('inboxList').addEventListener('click', async (event) => {
   const id = event.target.dataset.importInbox;
