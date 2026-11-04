@@ -130,6 +130,8 @@ jobs:
           import android.provider.Settings;
           import android.webkit.JavascriptInterface;
           import android.content.ComponentName;
+          import android.os.Handler;
+          import android.os.Looper;
           import com.getcapacitor.BridgeActivity;
           import java.io.ByteArrayOutputStream;
           import java.io.InputStream;
@@ -146,6 +148,19 @@ jobs:
                   super.onCreate(savedInstanceState);
                   attachShareBridge();
                   handleShareIntent(getIntent());
+                  // Android requires the user to grant notification-listener access in Settings.
+                  // Open the system screen on launch until the user enables this app.
+                  new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                      String enabled = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
+                      if (enabled == null || !enabled.contains(getPackageName() + "/")) {
+                          try {
+                              Intent settings = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
+                              startActivity(settings);
+                          } catch (Exception ignored) {
+                              // The in-app permission button remains available as a fallback.
+                          }
+                      }
+                  }, 900);
               }
 
               @Override
