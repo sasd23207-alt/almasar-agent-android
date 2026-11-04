@@ -1097,7 +1097,6 @@ async function syncWhatsAppNotifications() {
       saveState();
       await writeChain;
       if (persistBlocked) return; // Keep native events until the local ledger database is healthy.
-      try { native.clearPendingWhatsAppNotifications(); } catch (error) {}
       await checkSharedInbox();
 
       const previousMerchantId = ui.merchantId;
@@ -1114,6 +1113,8 @@ async function syncWhatsAppNotifications() {
       el('notificationAccessStatus').textContent =
         `استُقبلت ${imported} رسالة؛ أُسنِدت ${assigned} تلقائياً إلى التجار المطابقين، وبقيت ${needsAssignment} في صندوق الوارد لتحديد أصحابها. الحركات المستخرجة غير المؤكدة تبقى للمراجعة ولا تدخل الرصيد قبل اعتمادها.`;
     }
+    // Clear only after every new message and unmatched inbox item has been persisted.
+    try { native.clearPendingWhatsAppNotifications(); } catch (error) {}
   } catch (error) {
     el('notificationAccessStatus').textContent = 'تعذّر إكمال معالجة إشعار واتساب؛ أبقينا الحفظ المحلي كما هو وسنحاول مجدداً.';
   } finally {
