@@ -48,10 +48,22 @@ test('Android build declares a WhatsApp Business-only notification listener serv
   assert.match(workflow, /getPendingWhatsAppNotifications/);
 });
 
-test('app exposes notification permission controls and stages received alerts in the local inbox', () => {
+test('WhatsApp notifications are matched to a unique merchant and analyzed automatically', () => {
   const app = fs.readFileSync('index.html', 'utf8');
   assert.match(app, /enableNotificationAccess/);
   assert.match(app, /syncWhatsAppNotifications/);
-  assert.match(app, /wa-notification-/);
+  assert.match(app, /findMerchantForWhatsAppContact/);
+  assert.match(app, /sourceEventId: eventId/);
+  assert.match(app, /await analyzeNewMessages\(\)/);
   assert.match(app, /whatsapp-business-notification/);
+  assert.match(app, /wa-notification-/); // unmatched contacts remain staged for manual assignment
+  assert.match(app, /الحركات المستخرجة غير المؤكدة تبقى للمراجعة/);
+});
+
+test('WhatsApp event ingestion is idempotent and does not discard events before local persistence', () => {
+  const app = fs.readFileSync('index.html', 'utf8');
+  assert.match(app, /knownEventIds\.has\(eventId\)/);
+  assert.match(app, /await writeChain/);
+  assert.match(app, /if \(persistBlocked\) return/);
+  assert.match(app, /notificationSyncRunning/);
 });
