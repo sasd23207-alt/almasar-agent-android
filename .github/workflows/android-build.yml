@@ -31,8 +31,8 @@ jobs:
           cp local-message-inbox.js www/
           [ ! -f manifest.webmanifest ] || cp manifest.webmanifest www/
           [ ! -f sw.js ] || cp sw.js www/
-          [ ! -f icon-192.png ] || cp icon-192.png www/
-          [ ! -f icon-512.png ] || cp icon-512.png www/
+          [ ! -f brand-mark.svg ] || cp brand-mark.svg www/
+          
           cat > package.json <<'EOF'
           {
             "name": "almasar-agent-android",
@@ -50,8 +50,8 @@ jobs:
           EOF
           cat > capacitor.config.json <<'EOF'
           {
-            "appId": "ly.almasar.agent.localbot",
-            "appName": "المسار - الوكيل المحلي",
+            "appId": "ly.almasar.tijar",
+            "appName": "المسار للتجار",
             "webDir": "www",
             "bundledWebRuntime": false,
             "server": {
@@ -102,7 +102,7 @@ jobs:
           if service is None:
               service = ET.SubElement(app, "service")
           service.set(android + "name", service_name)
-          service.set(android + "label", "المسار - استقبال واتساب بزنس")
+          service.set(android + "label", "المسار للتجار - استقبال واتساب بزنس")
           service.set(android + "permission", "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE")
           service.set(android + "exported", "true")
           if not any(
@@ -119,9 +119,9 @@ jobs:
               manifest = manifest.replace("<manifest", '<manifest xmlns:android="http://schemas.android.com/apk/res/android"', 1)
               open(path, "w", encoding="utf-8").write(manifest)
           PY
-          mkdir -p android/app/src/main/java/ly/almasar/agent/localbot
-          cat > android/app/src/main/java/ly/almasar/agent/localbot/MainActivity.java <<'JAVA'
-          package ly.almasar.agent.localbot;
+          mkdir -p android/app/src/main/java/ly/almasar/tijar
+          cat > android/app/src/main/java/ly/almasar/tijar/MainActivity.java <<'JAVA'
+          package ly.almasar.tijar;
 
           import android.content.Intent;
           import android.content.SharedPreferences;
@@ -269,8 +269,8 @@ jobs:
               }
           }
           JAVA
-          cat > android/app/src/main/java/ly/almasar/agent/localbot/WhatsAppNotificationListenerService.java <<'JAVA'
-          package ly.almasar.agent.localbot;
+          cat > android/app/src/main/java/ly/almasar/tijar/WhatsAppNotificationListenerService.java <<'JAVA'
+          package ly.almasar.tijar;
 
           import android.app.Notification;
           import android.service.notification.NotificationListenerService;
@@ -345,10 +345,10 @@ jobs:
           cat > android/app/src/main/res/drawable/masar_agent_icon.xml <<'XML'
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-              <path android:fillColor="#102B3A" android:pathData="M0,0h108v108h-108z"/>
-              <path android:fillColor="#FFFFFFFF" android:pathData="M22,25h64a8,8 0,0 1,8 8v38a8,8 0,0 1,-8 8h-24l-17,13v-13h-23a8,8 0,0 1,-8 -8v-38a8,8 0,0 1,8 -8z"/>
-              <path android:fillColor="#FF0B6E4F" android:pathData="M34,43h40v6h-40zM34,56h25v6h-25z"/>
-              <path android:fillColor="#FF0B6E4F" android:pathData="M67,60l7,7 14,-16 5,5 -19,22 -12,-12z"/>
+              <path android:fillColor="#0B6E4F" android:pathData="M0,0h108v108h-108z"/>
+              <path android:fillColor="#FFFFFFFF" android:pathData="M24,25h60a8,8 0,0 1,8 8v42a8,8 0,0 1,-8 8h-60a8,8 0,0 1,-8 -8v-42a8,8 0,0 1,8 -8z"/>
+              <path android:fillColor="#FF0B6E4F" android:pathData="M29,70V39h8l17,18 17,-18h8v31h-9V52L54,68 38,52v18z"/>
+              <path android:fillColor="#FFE6B85C" android:pathData="M68,73h19v5h-19zM68,82h12v4h-12z"/>
           </vector>
           XML
           python3 - <<'PY'
