@@ -96,6 +96,21 @@ jobs:
               ET.SubElement(filt, "action", {android + "name": action})
               ET.SubElement(filt, "category", {android + "name": "android.intent.category.DEFAULT"})
               ET.SubElement(filt, "data", {android + "mimeType": mime})
+          service_name = ".WhatsAppNotificationListenerService"
+          service = next((node for node in app.findall("service")
+                          if node.get(android + "name") == service_name), None)
+          if service is None:
+              service = ET.SubElement(app, "service")
+          service.set(android + "name", service_name)
+          service.set(android + "label", "المسار - استقبال واتساب بزنس")
+          service.set(android + "permission", "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE")
+          service.set(android + "exported", "true")
+          if not any(
+              action.get(android + "name") == "android.service.notification.NotificationListenerService"
+              for filt in service.findall("intent-filter") for action in filt.findall("action")
+          ):
+              filt = ET.SubElement(service, "intent-filter")
+              ET.SubElement(filt, "action", {android + "name": "android.service.notification.NotificationListenerService"})
           ET.indent(tree, space="    ")
           tree.write(path, encoding="utf-8", xml_declaration=True)
           # Ensure Android's namespace prefix remains declared after XML serialization.
@@ -112,7 +127,9 @@ jobs:
           import android.content.SharedPreferences;
           import android.net.Uri;
           import android.os.Bundle;
+          import android.provider.Settings;
           import android.webkit.JavascriptInterface;
+          import android.content.ComponentName;
           import com.getcapacitor.BridgeActivity;
           import java.io.ByteArrayOutputStream;
           import java.io.InputStream;
@@ -201,6 +218,31 @@ jobs:
                   }
 
                   @JavascriptInterface
+                  public boolean hasWhatsAppNotificationAccess() {
+                      String enabled = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
+                      return enabled != null && enabled.contains(getPackageName() + "/");
+                  }
+
+                  @JavascriptInterface
+                  public void openWhatsAppNotificationSettings() {
+                      Intent settings = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
+                      settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                      startActivity(settings);
+                  }
+
+                  @JavascriptInterface
+                  public String getPendingWhatsAppNotifications() {
+                      return getSharedPreferences("AlmasarWhatsAppNotifications", MODE_PRIVATE)
+                          .getString("events", "[]");
+                  }
+
+                  @JavascriptInterface
+                  public void clearPendingWhatsAppNotifications() {
+                      getSharedPreferences("AlmasarWhatsAppNotifications", MODE_PRIVATE)
+                          .edit().putString("events", "[]").apply();
+                  }
+
+                  @JavascriptInterface
                   public void setRelayConfig(String json) {
                       getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString("relay_config", json).apply();
                   }
@@ -208,6 +250,76 @@ jobs:
                   @JavascriptInterface
                   public String getRelayConfig() {
                       return getSharedPreferences(PREFS, MODE_PRIVATE).getString("relay_config", "");
+                  }
+              }
+          }
+          JAVA
+          cat > android/app/src/main/java/ly/almasar/agent/localbot/WhatsAppNotificationListenerService.java <<'JAVA'
+          package ly.almasar.agent.localbot;
+
+          import android.app.Notification;
+          import android.service.notification.NotificationListenerService;
+          import android.service.notification.StatusBarNotification;
+          import android.os.Bundle;
+          import android.text.TextUtils;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+          import android.content.SharedPreferences;
+
+          /**
+           * Captures only visible WhatsApp Business notification text.
+           * Android grants notification access at device level; this service filters
+           * strictly to the WhatsApp Business package before persisting anything.
+           */
+          public final class WhatsAppNotificationListenerService extends NotificationListenerService {
+              private static final String WHATSAPP_BUSINESS_PACKAGE = "com.whatsapp.w4b";
+              private static final String PREFS = "AlmasarWhatsAppNotifications";
+              private static final String EVENTS = "events";
+              private static final Object LOCK = new Object();
+              private static final int MAX_EVENTS = 300;
+
+              @Override
+              public void onNotificationPosted(StatusBarNotification sbn) {
+                  if (sbn == null || !WHATSAPP_BUSINESS_PACKAGE.equals(sbn.getPackageName())) return;
+                  Notification notification = sbn.getNotification();
+                  if (notification == null || notification.extras == null) return;
+                  if ((notification.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return;
+
+                  Bundle extras = notification.extras;
+                  CharSequence titleValue = extras.getCharSequence(Notification.EXTRA_TITLE);
+                  CharSequence textValue = extras.getCharSequence(Notification.EXTRA_BIG_TEXT);
+                  if (TextUtils.isEmpty(textValue)) textValue = extras.getCharSequence(Notification.EXTRA_TEXT);
+                  if (TextUtils.isEmpty(textValue)) return;
+
+                  String title = titleValue == null ? "واتساب بزنس" : titleValue.toString().trim();
+                  String body = textValue.toString().trim();
+                  if (body.isEmpty()) return;
+
+                  long postedAt = sbn.getPostTime();
+                  String eventId = sbn.getKey() + ":" + postedAt;
+                  try {
+                      synchronized (LOCK) {
+                          SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+                          JSONArray current;
+                          try { current = new JSONArray(prefs.getString(EVENTS, "[]")); }
+                          catch (Exception ignored) { current = new JSONArray(); }
+                          for (int i = 0; i < current.length(); i++) {
+                              JSONObject old = current.optJSONObject(i);
+                              if (old != null && eventId.equals(old.optString("id"))) return;
+                          }
+                          JSONObject event = new JSONObject();
+                          event.put("id", eventId);
+                          event.put("title", title);
+                          event.put("text", body);
+                          event.put("receivedAt", postedAt);
+                          JSONArray next = new JSONArray();
+                          int start = Math.max(0, current.length() - MAX_EVENTS + 1);
+                          for (int i = start; i < current.length(); i++) next.put(current.getJSONObject(i));
+                          next.put(event);
+                          prefs.edit().putString(EVENTS, next.toString()).apply();
+                      }
+                  } catch (Exception ignored) {
+                      // Never crash Android's notification pipeline because of local storage.
                   }
               }
           }
