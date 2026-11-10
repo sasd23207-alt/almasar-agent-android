@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     private val exec = Executors.newSingleThreadExecutor()
     private var last = ""
     private var lastT = 0L
+    @Volatile private var scanBusy = false
     private var fcb: ValueCallback<Array<Uri>>? = null
     private var printView: WebView? = null
 
@@ -143,18 +144,14 @@ class MainActivity : AppCompatActivity() {
             val preview = Preview.Builder().build().also { it.setSurfaceProvider(pv.surfaceProvider) }
             val analysis = ImageAnalysis.Builder()
                 .setResolutionSelector(ResolutionSelector.Builder().setResolutionStrategy(
-                    ResolutionStrategy(Size(1920, 1080), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)).build())
+                    ResolutionStrategy(Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)).build())
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
             pr.unbindAll()
             cam = pr.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
-            val maxZ = cam?.cameraInfo?.zoomState?.value?.maxZoomRatio ?: 1f
-            val zoom = ZoomSuggestionOptions.Builder(ZoomSuggestionOptions.ZoomCallback { z ->
-                cam?.cameraControl?.setZoomRatio(z); true      // تكبير تلقائي للباركود البعيد
-            }).setMaxSupportedZoomRatio(maxZ).build()
             val sc = BarcodeScanning.getClient(BarcodeScannerOptions.Builder()
                 .setBarcodeFormats(Barcode.FORMAT_EAN_13, Barcode.FORMAT_EAN_8, Barcode.FORMAT_UPC_A, Barcode.FORMAT_UPC_E,
                     Barcode.FORMAT_CODE_128, Barcode.FORMAT_CODE_39, Barcode.FORMAT_ITF, Barcode.FORMAT_QR_CODE)
-                .enableAllPotentialBarcodes().setZoomSuggestionOptions(zoom).build())
+                .build())
             scanner = sc
             analysis.setAnalyzer(exec) { p -> analyze(p, sc) }
             pv.setOnTouchListener { _, e ->
@@ -167,16 +164,22 @@ class MainActivity : AppCompatActivity() {
 
     @androidx.annotation.OptIn(ExperimentalGetImage::class)
     private fun analyze(p: ImageProxy, sc: BarcodeScanner) {
+        if (scanBusy) { p.close(); return }
         val img = p.image
         if (img == null) { p.close(); return }
+        scanBusy = true
         sc.process(InputImage.fromMediaImage(img, p.imageInfo.rotationDegrees))
-            .addOnSuccessListener { l -> l.firstOrNull { it.rawValue != null }?.rawValue?.let { hit(it) } }
-            .addOnCompleteListener { p.close() }
+            .addOnSuccessListener { codes ->
+                codes.asSequence().filter { !it.rawValue.isNullOrBlank() }
+                    .sortedByDescending { it.rawValue!!.length }
+                    .firstOrNull()?.rawValue?.let { hit(it) }
+            }
+            .addOnCompleteListener { scanBusy = false; p.close() }
     }
 
     private fun hit(code: String) {
         val n = System.currentTimeMillis()
-        if (code == last && n - lastT < 1500) return
+        if (code == last && n - lastT < 1100) return
         last = code; lastT = n
         (getSystemService(VIBRATOR_SERVICE) as Vibrator).vibrate(VibrationEffect.createOneShot(40, VibrationEffect.DEFAULT_AMPLITUDE))
         web.evaluateJavascript("window.__scan(" + JSONObject.quote(code) + ")", null)   // يُضاف للفاتورة فوراً
