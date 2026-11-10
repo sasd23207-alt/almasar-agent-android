@@ -293,7 +293,21 @@ function normalizeState(o){
 
 /* ---------- products / stock ---------- */
 function prodById(id){for(var i=0;i<S.products.length;i++)if(S.products[i].id===id)return S.products[i];return null;}
-function prodByBarcode(code){for(var i=0;i<S.products.length;i++){if(S.products[i].barcodes.indexOf(code)>=0)return S.products[i];}return null;}
+function barcodeKey(code){
+  return normNum(code).replace(/[\\s-]/g,'');
+}
+function prodByBarcode(code){
+  var key=barcodeKey(code);
+  var alt=/^\\d{12}$/.test(key)?'0'+key:(/^0\\d{12}$/.test(key)?key.slice(1):'');
+  for(var i=0;i<S.products.length;i++){
+    var codes=S.products[i].barcodes||[];
+    for(var j=0;j<codes.length;j++){
+      var saved=barcodeKey(codes[j]);
+      if(saved===key||(alt&&saved===alt))return S.products[i];
+    }
+  }
+  return null;
+}
 function addMove(p,qty,type,ref,note){
   p.stock=(p.stock||0)+qty;
   S.moves.push({id:nextId('move'),ts:Date.now(),pid:p.id,qty:qty,type:type,ref:ref||'',note:note||''});
@@ -714,7 +728,7 @@ function setLink(on){linked=on;$('btnPhone').classList.toggle('on',on);if(on)toa
 function reply(o){try{if(dc&&dc.readyState==='open')dc.send(JSON.stringify(o));}catch(e){}}
 window.__scan=function(c){phoneScan(c);};
 function phoneScan(code){
-  code=normNum(code);var p=prodByBarcode(code);
+  code=barcodeKey(code);var p=prodByBarcode(code);
   if(!p||!p.active){beep('err');toast('باركود غير مسجل: '+code,true);reply({ok:false,code:code});return;}
   if(countSess&&countM&&document.body.contains(countM.wrap)){countSess[p.id]=(countSess[p.id]||0)+1000;renderCount();beep(true);reply({ok:true,name:p.name,n:fmtQty(countSess[p.id])});return;}
   countSess=null;
